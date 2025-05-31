@@ -1,4 +1,6 @@
-Currently a work in progress, not working due to type error.  /docs/ is where github pages hosted, which you can access here: https://recently.github.io/WeCantJOT/   
+Currently a work in progress, not working yet.  Some errors with being able to check just the chat box, marking things, etc... but we're getting there.
+
+  /docs/ is where github pages hosted, which you can access here: https://recently.github.io/WeCantJOT/   
 
 To build your own, 
 clone repo, 
