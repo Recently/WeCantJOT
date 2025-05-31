@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Jack of Trades Auto-Detect Overlay</title>
+  <title>We Cant Jack of Trades</title>
+ <!-- No U --> 
   <script src="https://alt1addons.s3.amazonaws.com/alt1/alt1as.js"></script>
   <style>
     /* Red “X” style */
@@ -43,13 +44,14 @@
         return;
       }
 
-      // 2) List of all “Jack of Trades” skill names (must match PNG filenames in skill-icons/)
+      // 2) List of all “Jack of Trades” skill names (must match PNG filenames in skill-icons/).
       const skillNames = [
         "Attack", "Constitution", "Mining", "Strength", "Agility", "Smithing",
         "Defence", "Herblore", "Fishing", "Ranged", "Thieving", "Cooking",
         "Prayer", "Crafting", "Firemaking", "Magic", "Fletching", "Woodcutting",
         "Runecraft", "Slayer", "Farming", "Construction", "Hunter", "Summoning",
-        "Dungeoneering", "Divination", "Invention"
+        "Dungeoneering", "Divination", "Invention",
+        "Necromancy", "Archaeology"
       ];
 
       // 3) Load all template images for each skill
@@ -58,7 +60,7 @@
           const img = new Image();
           img.src = `skill-icons/${name}.png`;
           img.onload = () => resolve({ name, img });
-          img.onerror = () => reject(`Failed to load template for ${name}`);
+          img.onerror = () => reject(`Failed to load template for ${name}.png`);
         });
       }
 
@@ -66,7 +68,7 @@
       try {
         templates = await Promise.all(skillNames.map(loadTemplate));
       } catch (err) {
-        document.getElementById("status").innerText = 
+        document.getElementById("status").innerText =
           "Error loading skill-icon templates: " + err;
         return;
       }
@@ -81,18 +83,16 @@
       document.getElementById("status").innerText = "Detecting skill positions…";
 
       // 5) For each template, run alt1.findSubimage to locate it on the screenshot.
-      //    We’ll build a map: skillName → { x: absoluteX, y: absoluteY }.
-      const skillMap = {}; 
+      //    Build map: skillName → { x: absoluteX, y: absoluteY }.
+      const skillMap = {};
       for (const { name, img } of templates) {
-        // threshold 0.9 (you can tweak if icons have slight variations)
+        // threshold 0.9 (tweak if necessary)
         const matches = await alt1.findSubimage(fullSnap, img, 0.9);
         if (matches.length) {
-          // pick the first match
           const { x, y } = matches[0];
-          // x,y are relative to the top-left of fullSnap; add gameRect.x/y to get absolute
           skillMap[name] = { x: gameRect.x + x, y: gameRect.y + y };
         } else {
-          console.warn(`Could not locate ${name} icon on screen.`);
+          console.warn(`Could not locate ${name}.png on screen.`);
         }
       }
 
