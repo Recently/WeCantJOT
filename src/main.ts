@@ -1,181 +1,293 @@
 // src/main.ts
+import * as a1lib from "alt1";
+import { ImgRefBind, ImgRefData } from "alt1";
+import ChatBoxReader from "alt1/chatbox";
 
-import "./styles.css";
-import { SKILLS, type SkillName } from "./skillList";
-import { buildCheckboxUI, updateCheckboxUI } from "./ui";
+// List of all Jack‐of‐Trades skills
+const skillNames = [
+  "Attack",
+  "Constitution",
+  "Mining",
+  "Strength",
+  "Agility",
+  "Smithing",
+  "Defence",
+  "Herblore",
+  "Fishing",
+  "Ranged",
+  "Thieving",
+  "Cooking",
+  "Prayer",
+  "Crafting",
+  "Firemaking",
+  "Magic",
+  "Fletching",
+  "Woodcutting",
+  "Runecraft",
+  "Slayer",
+  "Farming",
+  "Construction",
+  "Hunter",
+  "Summoning",
+  "Dungeoneering",
+  "Divination",
+  "Invention",
+  "Necromancy",
+  "Archaeology",
+];
 
 /**
- * No ESM imports from "alt1/*"—we rely on the real runtime object injected into window.alt1.
+ * Renders a simple “manual tracker” UI into <body>:
+ *   - One checkbox per skill.
+ *   - Saves each checkbox state to localStorage under key "jot-manual-<SkillName>".
+ *   - Includes a “Reset All” button which clears all manual checkmarks.
  */
-let alt1Api: any = null; // Will be set to window.alt1 once it’s ready
+function renderManualTracker(): void {
+  document.body.innerHTML = "";
 
-// Tracks which skills have been completed
-const completedSkills: Set<SkillName> = new Set<SkillName>();
+  const container = document.createElement("div");
+  container.id = "manualTracker";
+  container.style.padding = "1rem";
+  container.style.fontFamily = "sans-serif";
 
-// Sidebar HTML references
-let checkboxListEl: HTMLUListElement;
-let resetButtonEl: HTMLButtonElement;
+  const header = document.createElement("h2");
+  header.innerText = "Manual Jack‐of‐Trades Tracker";
+  container.appendChild(header);
 
-// Overlay canvas & 2D context
-let overlayCanvas: HTMLCanvasElement;
-let ctx: CanvasRenderingContext2D;
+  const desc = document.createElement("p");
+  desc.innerText =
+    "Alt1 is not available (or RS window is not linked). Use these checkboxes to track your Jack‐of‐Trades steps manually. Changes are saved in localStorage.";
+  container.appendChild(desc);
 
-/**
- * Called once alt1Api is fully available. Builds the sidebar UI and starts the main loop.
- */
-function init() {
-  console.log("⚙️ Running init()");
+  const form = document.createElement("div");
+  form.style.display = "grid";
+  form.style.gridTemplateColumns = "repeat(auto‐fill, minmax(150px, 1fr))";
+  form.style.gap = "0.5rem";
 
-  // 1) Grab DOM elements for the sidebar
-  checkboxListEl = document.getElementById("checkbox-list") as HTMLUListElement;
-  resetButtonEl  = document.getElementById("reset-btn")    as HTMLButtonElement;
+  skillNames.forEach((name) => {
+    const field = document.createElement("label");
+    field.style.display = "flex";
+    field.style.alignItems = "center";
+    field.style.cursor = "pointer";
 
-  // 2) Build initial sidebar checkboxes (all unchecked)
-  buildCheckboxUI(SKILLS, completedSkills, checkboxListEl, onCheckboxToggle);
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.id = `chk‐${name}`;
+    checkbox.style.marginRight = "0.5rem";
 
-  // 3) Hook up the “Reset All” button
-  resetButtonEl.addEventListener("click", () => {
-    completedSkills.clear();
-    updateCheckboxUI(SKILLS, completedSkills, checkboxListEl);
+    const saved = localStorage.getItem(`jot‐manual‐${name}`);
+    if (saved === "true") {
+      checkbox.checked = true;
+    }
+
+    checkbox.addEventListener("change", () => {
+      localStorage.setItem(`jot‐manual‐${name}`, checkbox.checked.toString());
+    });
+
+    field.appendChild(checkbox);
+    field.appendChild(document.createTextNode(name));
+    form.appendChild(field);
   });
 
-  // 4) Grab the overlay canvas & 2D drawing context
-  overlayCanvas = document.getElementById("overlay-canvas") as HTMLCanvasElement;
-  ctx = overlayCanvas.getContext("2d")!;
+  container.appendChild(form);
 
-  // 5) Kick off the main Alt1 loop using window.requestAnimationFrame
-  window.requestAnimationFrame(mainLoop);
+  const resetBtn = document.createElement("button");
+  resetBtn.innerText = "Reset All";
+  resetBtn.style.marginTop = "1rem";
+  resetBtn.style.padding = "0.5rem 1rem";
+  resetBtn.style.cursor = "pointer";
+  resetBtn.addEventListener("click", () => {
+    skillNames.forEach((n) => {
+      localStorage.removeItem(`jot‐manual‐${n}`);
+      const cb = document.getElementById(`chk‐${n}`) as HTMLInputElement | null;
+      if (cb) cb.checked = false;
+    });
+  });
+  container.appendChild(resetBtn);
+
+  document.body.appendChild(container);
 }
 
-/**
- * Called when the user toggles a skill checkbox manually.
- */
-function onCheckboxToggle(skill: SkillName, isChecked: boolean) {
-  if (isChecked) completedSkills.add(skill);
-  else            completedSkills.delete(skill);
+(async () => {
+  // If Alt1 isn’t injected, or the game isn’t linked, show fallback checkboxes.
+  if (!window.alt1 || typeof window.alt1.rsLinked !== "boolean") {
+    console.warn("Alt1 not detected. Rendering manual‐tracker fallback.");
+    renderManualTracker();
+    return;
+  }
+  if (!window.alt1.rsLinked) {
+    console.warn("RuneScape window is not linked. Showing manual fallback.");
+    renderManualTracker();
+    return;
+  }
 
-  updateCheckboxUI(SKILLS, completedSkills, checkboxListEl);
-}
+  console.log("✅ Alt1 injected and RS3 is linked.");
 
-/**
- * Matches ANY “You gain experience in [SKILL] and have now completed X/Y skills for your Jack of Trades aura.”
- *    e.g. “... have now completed 7/15 skills ...” or “... have now completed 12/25 skills ...”
- *
- * Captures the skill name in group 1.
- */
-const jotRegex =
-  /You gain experience in ([A-Za-z]+) and have now completed \d+\/\d+ skills for your Jack of Trades aura\./;
+  // 1) Read the RS window’s rectangle
+  const rsX = (window.alt1.rsX as number) || 0;
+  const rsY = (window.alt1.rsY as number) || 0;
+  const rsWidth = (window.alt1.rsWidth as number) || 0;
+  const rsHeight = (window.alt1.rsHeight as number) || 0;
+  console.log("rsX, rsY, rsWidth, rsHeight ➞", rsX, rsY, rsWidth, rsHeight);
 
-/**
- * Each frame, read up to 5 lines of chat (newest = index 0). If a line matches jotRegex,
- * extract the skill name and mark it complete.
- */
-function pollChatboxForJoT() {
-  const chatboxApi = alt1Api.chatbox;
+  // 2) Bind the full RS window so we can capture OCR on demand
+  let fullHandle: number;
+  try {
+    fullHandle = await window.alt1.bindRegion(rsX, rsY, rsWidth, rsHeight);
+  } catch (bindErr: any) {
+    console.error("Could not bind full RS window:", bindErr);
+    renderManualTracker();
+    return;
+  }
+  const fullImgRef = new ImgRefBind(fullHandle, rsX, rsY, rsWidth, rsHeight);
+  console.log(">> BOUND fullImgRef:", fullImgRef);
 
-  for (let i = 0; i < 5; i++) {
-    const line = chatboxApi.getChatLine(i);
-    if (!line) continue;
+  // 3) Take a one‐time snapshot of the full RS window => ImgRefData
+  let fullSnapshot: ImgRefData;
+  try {
+    // We cast to ImgRefData because TS currently thinks .read(...) returns ImageData
+    fullSnapshot = (await fullImgRef.read(0, 0, rsWidth, rsHeight)) as unknown as ImgRefData;
+  } catch (readErr: any) {
+    console.error("Could not read fullImgRef:", readErr);
+    renderManualTracker();
+    return;
+  }
 
-    const match = jotRegex.exec(line.text);
-    if (match) {
-      const skillName = match[1] as SkillName;
-      if (SKILLS.includes(skillName) && !completedSkills.has(skillName)) {
-        completedSkills.add(skillName);
-        updateCheckboxUI(SKILLS, completedSkills, checkboxListEl);
+  // 4) Use ChatBoxReader once on that snapshot to locate the chatbox UI
+  const chatbox = new ChatBoxReader();
+  let initData: any;
+  try {
+    initData = await chatbox.find(fullSnapshot);
+  } catch (chatErr: any) {
+    console.error("Initial chatbox.find(...) failed:", chatErr);
+    renderManualTracker();
+    return;
+  }
+  if (!initData || !chatbox.pos || !chatbox.pos.mainbox) {
+    console.error(
+      "ChatBoxReader failed to locate chat UI. Fallback to manual tracker."
+    );
+    renderManualTracker();
+    return;
+  }
+  console.log(">> chatbox.find(fullSnapshot) returned:", initData);
+  console.log(">> chatbox.pos:", chatbox.pos);
+
+  // 5) We no longer need the full bind anymore
+  window.alt1.clearBinds?.();
+
+  // 6) Compute the small “chat strip” region based on chatbox.pos.mainbox
+  const mbRect = chatbox.pos.mainbox.rect; // { x, y, width, height } in RS coords
+  const mbBot = chatbox.pos.mainbox.botleft; // { x, y } in RS coords
+  const chatHeight = 30; // fix to 30px high
+  const chatX = rsX + mbRect.x;
+  const chatY = rsY + mbBot.y - chatHeight;
+  const chatWidth = mbBot.x - mbRect.x;
+  console.log("→ chat‐only region:", { chatX, chatY, chatWidth, chatHeight });
+
+  // 7) Bind just that small chat area so we can run OCR every frame
+  let chatHandle: number;
+  try {
+    chatHandle = await window.alt1.bindRegion(
+      chatX,
+      chatY,
+      chatWidth,
+      chatHeight
+    );
+  } catch (bindErr: any) {
+    console.error("Could not bind chat region:", bindErr);
+    renderManualTracker();
+    return;
+  }
+  const chatImgRef = new ImgRefBind(chatHandle, chatX, chatY, chatWidth, chatHeight);
+  console.log(">> BOUND chatImgRef:", chatImgRef);
+
+  // 8) Load all skill‐icon images from skill‐icons/*.png and build ImgRefData for each
+  type Template = { name: string; iconRef: ImgRefData };
+  const templates: Template[] = [];
+
+  for (const name of skillNames) {
+    // 8a) Create a DOM <img> to load the PNG file
+    const imgEl = new Image();
+    imgEl.src = `skill‐icons/${name}‐icon.png`;
+    await new Promise<void>((resolve, reject) => {
+      imgEl.onload = () => resolve();
+      imgEl.onerror = () =>
+        reject(new Error(`Failed to load skill‐icon: ${name}‐icon.png`));
+    });
+
+    // 8b) Convert that <img> into ImgRefData (force through “any” so TS is happy)
+    const iconRef = new (ImgRefData as any)(imgEl as any) as ImgRefData;
+    console.log(`→ Loaded ImgRefData("${name}") w=${imgEl.width}`);
+
+    templates.push({ name, iconRef });
+  }
+  console.log(
+    `→ Loaded ${templates.length}/${skillNames.length} skill‐icon templates.`
+  );
+
+  // 9) One‐time template‐match of each skill icon on the *full* RS window
+  //     (we “read” the full window again since we need pixel data for template matching).
+  //     We kept fullImgRef bound until now, so we can do findSubimage() on it.
+  const skillMap: Record<string, { x: number; y: number }> = {};
+  for (const { name, iconRef } of templates) {
+    try {
+      const hits = await (fullImgRef as any).findSubimage(iconRef as any, 0.9);
+      if (hits.length > 0) {
+        const absX = rsX + hits[0].x;
+        const absY = rsY + hits[0].y;
+        skillMap[name] = { x: absX, y: absY };
+        console.log(`Found "${name}" icon at screen coords:`, { absX, absY });
+      } else {
+        console.warn(`Could not locate "${name}" icon on screen.`);
       }
-    }
-  }
-}
-
-/**
- * Dummy stub for locating a skill icon’s on-screen position.
- * Returns example coordinates so we can test the overlay drawing.
- * Replace with alt1Api.image.findSubimage(...) once you want real matching.
- */
-async function findSkillIconPosition(
-  skill: SkillName
-): Promise<{ x: number; y: number; w: number; h: number }> {
-  // Just place them in a horizontal row, 40px apart, at y = 100
-  return {
-    x: 50 + SKILLS.indexOf(skill) * 40,
-    y: 100,
-    w: 32,
-    h: 32,
-  };
-}
-
-/**
- * Clears the overlay canvas, then draws a red rectangle over each completed skill icon.
- */
-async function highlightCompletedSkills() {
-  ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-
-  for (const skill of completedSkills) {
-    const { x, y, w, h } = await findSkillIconPosition(skill);
-    if (w > 0 && h > 0) {
-      ctx.strokeStyle = "rgba(255, 0, 0, 0.8)";
-      ctx.lineWidth = 3;
-      ctx.strokeRect(x, y, w, h);
-    }
-  }
-}
-
-/**
- * The main loop (called ~60 FPS via window.requestAnimationFrame):
- *   a) Resize the overlay canvas to match the client window
- *   b) Poll the chatbox for new Jack of Trades messages
- *   c) Draw red rectangles over completed skills
- *   d) Request the next frame
- */
-function mainLoop() {
-  // a) Resize overlay canvas if game window size changed
-  const w = alt1Api.screenWidth();   // getter property returning number
-  const h = alt1Api.screenHeight();  // getter property returning number
-  if (overlayCanvas.width !== w || overlayCanvas.height !== h) {
-    overlayCanvas.width  = w;
-    overlayCanvas.height = h;
-  }
-
-  // b) Poll chatbox
-  pollChatboxForJoT();
-
-  // c) Draw overlays
-  highlightCompletedSkills();
-
-  // d) Schedule next frame
-  window.requestAnimationFrame(mainLoop);
-}
-
-/**
- * On DOMContentLoaded, repeatedly check (every 500 ms) until:
- *   – window.alt1 exists,
- *   – window.alt1.chatbox.getChatLine is a function,
- *   – window.alt1.screenWidth is a number—a sign that the API is fully ready.
- * Once all are true, grab alt1 into alt1Api and call init().
- */
-window.addEventListener("DOMContentLoaded", () => {
-  function waitForAlt1() {
-    const wAlt = (window as any).alt1;
-    if (
-      typeof wAlt !== "undefined" &&
-      typeof wAlt.chatbox === "object" &&
-      typeof wAlt.chatbox.getChatLine === "function" &&
-      typeof wAlt.screenWidth === "number"
-    ) {
-      // The real Alt1 API is ready:
-      alt1Api = wAlt;
-      console.log("🔵 Alt1 detected. Starting init().");
-      init();
-    } else {
-      console.log(
-        "⏳ Waiting for Alt1... (window.alt1 =",
-        (window as any).alt1,
-        ")"
-      );
-      setTimeout(waitForAlt1, 500);
+    } catch (subErr: any) {
+      console.error(`Error matching "${name}" icon:`, subErr);
     }
   }
 
-  waitForAlt1();
-});
+  const doneSkills = new Set<string>();
+  console.log("→ skillMap keys:", Object.keys(skillMap));
+
+  // 10) Every animation frame, OCR the small chat strip to look for JOT messages.
+  function loop(): void {
+    chatbox
+      // We must again cast to ImgRefData so TS is happy
+      .find((chatImgRef.read(0, 0, chatWidth, chatHeight) as unknown) as ImgRefData)
+      .then((chatData: any) => {
+        if (chatData && Array.isArray(chatData.rawWords)) {
+          for (const token of chatData.rawWords as string[]) {
+            // match “You gain experience in <Skill> and have now completed …”
+            const m = token.match(
+              /You\s+gain\s+experience\s+in\s+(\w+)\s+and\s+have\s+now\s+completed/
+            );
+            if (m) {
+              const skillName = m[1];
+              if (!doneSkills.has(skillName) && skillMap[skillName]) {
+                doneSkills.add(skillName);
+                const { x: absX, y: absY } = skillMap[skillName];
+
+                // Overlay a red “✘” at (absX, absY) for 2 seconds
+                const ov: any = a1lib;
+                ov.overlay.clearGroup("skills");
+                ov.overlay.setGroup("skills");
+                // RGBA = 0xRRGGBBAA: red=255, alpha=255 = 0xFF0000FF
+                ov.overlay.text("✘", 0xFF0000FF, 16, absX, absY, 2000);
+                ov.overlay.refreshGroup("skills");
+
+                console.log(`Marked "${skillName}" at (${absX}, ${absY})`);
+              }
+            }
+          }
+        }
+        window.requestAnimationFrame(loop);
+      })
+      .catch((err: any) => {
+        console.error("Error during per‐frame chat.find:", err);
+        window.requestAnimationFrame(loop);
+      });
+  }
+
+  console.log("✅ Overlay + ChatBoxReader ready. Listening for chat…");
+  window.requestAnimationFrame(loop);
+})();
