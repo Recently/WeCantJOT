@@ -1,0 +1,85 @@
+/* src/styles.css */
+
+/* 1) Make the entire page background black */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #000;    /* Black background for the alt1 app */
+  color: #fff;               /* White text by default */
+  font-family: Arial, sans-serif;
+}
+
+/* 2) Ensure the root container also sits on black */
+#app-root {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background-color: transparent; /* so black from <body> shows through */
+}
+
+/* Sidebar for checkboxes */
+#skill-checkboxes {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 200px;
+  max-height: 80vh;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.7); /* mostly-black translucent */
+  color: #fff;
+  padding: 8px;
+  border-radius: 4px;
+  z-index: 1000;
+}
+
+#skill-checkboxes h2 {
+  margin: 0 0 8px 0;
+  font-size: 1rem;
+}
+
+#skill-checkboxes button {
+  margin-bottom: 8px;
+  width: 100%;
+  padding: 4px;
+  background: #c0392b;
+  color: #fff;
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+#skill-checkboxes button:hover {
+  background: #e74c3c;
+}
+
+#checkbox-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+#checkbox-list li {
+  margin: 4px 0;
+  display: flex;
+  align-items: center;
+}
+
+#checkbox-list label {
+  margin-left: 4px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  color: #fff;
+}
+
+/* 3) The overlay canvas is transparent, so you can see the black beneath */
+#overlay-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 500;      /* under the UI but above the game window */
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  background-color: transparent;
+}

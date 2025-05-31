@@ -1,13 +1,14 @@
 {
   "compilerOptions": {
-    "outDir": "./dist/",
-    "sourceMap": true,
-    "strict": true,
-    "module": "es6",
-    "target": "es5",
+    "target": "es2015",
+    "module": "ESNext",
     "moduleResolution": "node",
-    "lib": ["es6", "dom"],
-    "esModuleInterop": true
+    "strict": true,
+    "esModuleInterop": true,
+    "sourceMap": true,
+    "downlevelIteration": true,
+    "lib": ["dom", "es2015"],
+    "outDir": "dist"
   },
   "include": ["src/**/*"]
 }
