@@ -6,12 +6,12 @@ import { buildCheckboxUI, updateCheckboxUI } from "./ui";
 
 /**
  * We do NOT import alt1/base or alt1/chatbox via ESM.
- * Instead, at runtime Alt1 injects window.alt1. We’ll poll until it exists
- * and has requestAnimationFrame() before we ever call init().
+ * Instead, at runtime Alt1 injects window.alt1. We poll until it exists
+ * and provides screenWidth(), screenHeight(), and chatbox.getChatLine().
  */
 let alt1Api: any = null; // Will hold window.alt1 once injected
 
-// A Set to track which skills have been marked complete
+// A Set tracking which skills have been marked complete
 const completedSkills: Set<SkillName> = new Set<SkillName>();
 
 // Sidebar HTML references
@@ -23,7 +23,7 @@ let overlayCanvas: HTMLCanvasElement;
 let ctx: CanvasRenderingContext2D;
 
 /**
- * Called once alt1Api is available. Builds the sidebar UI and starts the loop.
+ * Called once alt1Api (window.alt1) is available. Builds UI and starts the loop.
  */
 function init() {
   console.log("⚙️ Running init()");
@@ -32,7 +32,7 @@ function init() {
   checkboxListEl = document.getElementById("checkbox-list") as HTMLUListElement;
   resetButtonEl  = document.getElementById("reset-btn")    as HTMLButtonElement;
 
-  // 2) Build initial sidebar checkboxes
+  // 2) Build initial sidebar checkboxes (all start unchecked)
   buildCheckboxUI(SKILLS, completedSkills, checkboxListEl, onCheckboxToggle);
 
   // 3) “Reset All” clears the Set and updates the sidebar UI
@@ -41,16 +41,16 @@ function init() {
     updateCheckboxUI(SKILLS, completedSkills, checkboxListEl);
   });
 
-  // 4) Grab overlay canvas & 2D context
+  // 4) Grab overlay canvas & its 2D context
   overlayCanvas = document.getElementById("overlay-canvas") as HTMLCanvasElement;
   ctx = overlayCanvas.getContext("2d")!;
 
-  // 5) Kick off the Alt1 loop
-  alt1Api.requestAnimationFrame(mainLoop);
+  // 5) Kick off our mainLoop via the browser’s requestAnimationFrame
+  window.requestAnimationFrame(mainLoop);
 }
 
 /**
- * Called whenever a user toggles a checkbox manually in the sidebar.
+ * Callback when the user manually toggles a checkbox in the sidebar.
  */
 function onCheckboxToggle(skill: SkillName, isChecked: boolean) {
   if (isChecked) completedSkills.add(skill);
@@ -60,17 +60,18 @@ function onCheckboxToggle(skill: SkillName, isChecked: boolean) {
 }
 
 /**
- * RegExp matching ANY “X/Y skills for your Jack of Trades aura.” Example:
+ * RegExp to match ANY “X/Y skills for your Jack of Trades aura.”
+ * Examples:
  *   “You gain experience in Magic and have now completed 7/15 skills for your Jack of Trades aura.”
- *   “You gain experience in Thieving and have now completed 12/25 skills for your Jack of Trades aura.”
+ *   “You gain experience in Cooking and have now completed 12/25 skills for your Jack of Trades aura.”
  * Captures the skill name in group 1.
  */
 const jotRegex =
   /You gain experience in ([A-Za-z]+) and have now completed \d+\/\d+ skills for your Jack of Trades aura\./;
 
 /**
- * Each frame, read up to 5 lines of chat (0=newest). If any matches jotRegex,
- * extract skill name and mark it completed.
+ * Each frame, read up to 5 lines of chat (0=newest). If any match jotRegex,
+ * extract the skill name and mark it complete.
  */
 function pollChatboxForJoT() {
   const chatboxApi = alt1Api.chatbox;
@@ -91,8 +92,13 @@ function pollChatboxForJoT() {
 }
 
 /**
- * Stub for locating a skill icon on screen. Returns dummy coords so we can test overlay.
- * Replace this with real alt1Api.image.findSubimage() logic later.
+ * Stub for locating a skill icon on screen. Returns dummy coords so
+ * we can test overlay drawing. Later, replace with real image‐matching:
+ *
+ *   const iconImg = await alt1Api.image.loadFile(`skill-icons/${skill}-icon.png`);
+ *   const found   = await alt1Api.image.findSubimage(iconImg, 0.85);
+ *   if (found) return { x: found.x, y: found.y, w: iconImg.width, h: iconImg.height };
+ *   else       return { x: 0, y: 0, w: 0, h: 0 };
  */
 async function findSkillIconPosition(
   skill: SkillName
@@ -106,7 +112,8 @@ async function findSkillIconPosition(
 }
 
 /**
- * Clears the overlay canvas, then draws a red rectangle over each completed skill’s icon.
+ * Clears the overlay canvas, then draws a red rectangle over each
+ * completed skill’s icon (using dummy coords for now).
  */
 async function highlightCompletedSkills() {
   ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
@@ -122,12 +129,16 @@ async function highlightCompletedSkills() {
 }
 
 /**
- * The main Alt1 loop (~60 FPS): resize canvas, poll chat, draw overlays, schedule next frame.
+ * Our main loop, called ~60 FPS via window.requestAnimationFrame.
+ * 1) Resize our overlay canvas if the game window size changed
+ * 2) Poll the chatbox for new Jack of Trades messages
+ * 3) Draw red rectangles over any completed skills
+ * 4) Schedule the next frame
  */
 function mainLoop() {
-  // a) Resize overlay canvas to match the game window
-  const w = alt1Api.canvasWidth();
-  const h = alt1Api.canvasHeight();
+  // a) Resize the overlay canvas to match the client window
+  const w = alt1Api.screenWidth();   // use screenWidth() instead of canvasWidth()
+  const h = alt1Api.screenHeight();  // use screenHeight() instead of canvasHeight()
   if (overlayCanvas.width !== w || overlayCanvas.height !== h) {
     overlayCanvas.width  = w;
     overlayCanvas.height = h;
@@ -136,27 +147,35 @@ function mainLoop() {
   // b) Poll chatbox for Jack of Trades lines
   pollChatboxForJoT();
 
-  // c) Draw red rectangles over completed skills
+  // c) Draw overlays for completed skills
   highlightCompletedSkills();
 
-  // d) Schedule next frame
-  alt1Api.requestAnimationFrame(mainLoop);
+  // d) Schedule the next frame
+  window.requestAnimationFrame(mainLoop);
 }
 
 /**
- * Called on DOMContentLoaded. We keep checking every 500 ms until
+ * Called on DOMContentLoaded. We keep checking every 500ms until
  * window.alt1 exists AND window.alt1.requestAnimationFrame is a function.
  * Only then do we assign alt1Api = window.alt1 and call init().
  */
 window.addEventListener("DOMContentLoaded", () => {
   function waitForAlt1() {
-    if (typeof (window as any).alt1 !== "undefined" &&
-        typeof (window as any).alt1.requestAnimationFrame === "function") {
+    if (
+      typeof (window as any).alt1 !== "undefined" &&
+      typeof (window as any).alt1.screenWidth === "function" &&
+      typeof (window as any).alt1.chatbox === "object"
+    ) {
+      // Alt1 has injected the runtime API. Grab it now:
       alt1Api = (window as any).alt1;
       console.log("🔵 Alt1 detected. Starting init().");
       init();
     } else {
-      console.log("⏳ Waiting for Alt1... (window.alt1 =", (window as any).alt1, ")");
+      console.log(
+        "⏳ Waiting for Alt1... (window.alt1 =",
+        (window as any).alt1,
+        ")"
+      );
       setTimeout(waitForAlt1, 500);
     }
   }
