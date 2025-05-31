@@ -44,7 +44,8 @@
         return;
       }
 
-      // 2) List of all “Jack of Trades” skill names (must match PNG filenames in skill-icons/).
+      // 2) List of all “Jack of Trades” skill names (must match the base of each PNG filename).
+      //    Now expects files named like Attack-icon.png, Fishing-icon.png, etc.
       const skillNames = [
         "Attack", "Constitution", "Mining", "Strength", "Agility", "Smithing",
         "Defence", "Herblore", "Fishing", "Ranged", "Thieving", "Cooking",
@@ -54,13 +55,13 @@
         "Necromancy", "Archaeology"
       ];
 
-      // 3) Load all template images for each skill
+      // 3) Load all template images for each skill, using “-icon.png” suffix
       function loadTemplate(name) {
         return new Promise((resolve, reject) => {
           const img = new Image();
-          img.src = `skill-icons/${name}.png`;
+          img.src = `skill-icons/${name}-icon.png`;
           img.onload = () => resolve({ name, img });
-          img.onerror = () => reject(`Failed to load template for ${name}.png`);
+          img.onerror = () => reject(`Failed to load template for ${name}-icon.png`);
         });
       }
 
@@ -92,7 +93,7 @@
           const { x, y } = matches[0];
           skillMap[name] = { x: gameRect.x + x, y: gameRect.y + y };
         } else {
-          console.warn(`Could not locate ${name}.png on screen.`);
+          console.warn(`Could not locate ${name}-icon.png on screen.`);
         }
       }
 
