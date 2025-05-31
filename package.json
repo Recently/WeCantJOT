@@ -7,7 +7,6 @@
     "start": "webpack serve --mode development --open"
   },
   "dependencies": {
-    // We don't actually need any runtime dependencies—Alt1 injects itself.
   },
   "devDependencies": {
     "ts-loader": "^9.0.0",
