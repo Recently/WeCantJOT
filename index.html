@@ -3,20 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <title>We Cant Jack of Trades</title>
- <!-- No U --> 
-  <!-- (If you still need Bootstrap or other libs, you can keep them here.) -->
+
+  <!-- You can keep Bootstrap’s CSS if you need it, but remove the Bootstrap JS (which needs jQuery). -->
   <link
     rel="stylesheet"
     href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css"
     integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T"
     crossorigin="anonymous"
   >
-  <script src="scripts/jquery-3.4.1.slim.min.js"></script>
-  <script
-    src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"
-    integrity="sha384-wfSDF2E50Y2D1uUdj0O3uMBJnjuUD4Ih7YwaYd1iqfktj0Uod8GCExl3Og8ifwB6"
-    crossorigin="anonymous"
-  ></script>
   <link rel="stylesheet" type="text/css" href="https://runeapps.org/nis/nis.css" />
   <link rel="stylesheet" type="text/css" href="css/style.css">
 
@@ -24,16 +18,17 @@
   <link rel="stylesheet" type="text/css" href="https://runeapps.org/runeappslib.css">
 
   <!-- ==== ALT1 MODULES (UNPKG CDN) ==== -->
-  <!-- These must come before your own script so that the `alt1` object is defined. -->
+  <!-- These must come before your own script so that `alt1.*` is defined. -->
   <script src="https://unpkg.com/alt1/dist/base/index.js"></script>
   <script src="https://unpkg.com/alt1/dist/chatbox/index.js"></script>
-  <!-- If you later want OCR or Buffs, include them similarly:
-  <script src="https://unpkg.com/alt1/dist/ocr/index.js"></script>
-  <script src="https://unpkg.com/alt1/dist/buffs/index.js"></script>
+  <!-- If you need OCR or buffs later, you can add:
+       <script src="https://unpkg.com/alt1/dist/ocr/index.js"></script>
+       <script src="https://unpkg.com/alt1/dist/buffs/index.js"></script>
   -->
   <!-- ================================ -->
 
-  <script src="scripts/bosstimer.bundle.js"></script>
+  <!-- Remove bosstimer.bundle.js since it’s not needed for JOT functionality -->
+  <!-- <script src="scripts/bosstimer.bundle.js"></script> -->
 
   <style>
     /* Red “X” style */
@@ -68,19 +63,22 @@
 
   <script>
     (async () => {
-      // ── 1) Now that "https://unpkg.com/alt1/dist/base/index.js"
-      //       and "https://unpkg.com/alt1/dist/chatbox/index.js" are loaded,
-      //       alt1.getGameClient, alt1.captureRegion, alt1.findSubimage,
-      //       and alt1.chat.readAll should all exist.
-
-      const gameRect = await alt1.getGameClient();
-      if (!gameRect) {
+      // 1) Verify that alt1.getGameClient exists (i.e. UNPKG modules loaded)
+      if (typeof alt1.getGameClient !== "function") {
         document.getElementById("status").innerText =
-          "Could not find RS3 window (alt1.getGameClient undefined).";
+          "Error: alt1.getGameClient is undefined. Are you running inside Alt1?";
         return;
       }
 
-      // ── 2) List all Jack of Trades skills (file names must match "<SkillName>-icon.png")
+      // 2) Grab the RS3 window rectangle
+      const gameRect = await alt1.getGameClient();
+      if (!gameRect) {
+        document.getElementById("status").innerText =
+          "Could not find the RuneScape 3 client window.";
+        return;
+      }
+
+      // 3) List all Jack of Trades skill names (PNG files must be in skill-icons/)
       const skillNames = [
         "Attack","Constitution","Mining","Strength","Agility","Smithing",
         "Defence","Herblore","Fishing","Ranged","Thieving","Cooking",
@@ -90,12 +88,12 @@
         "Necromancy","Archaeology"
       ];
 
-      // ── 3) Load each template image from “skill-icons/<SkillName>-icon.png”
+      // 4) Load each template image from “skill-icons/<SkillName>-icon.png”
       function loadTemplate(name) {
         return new Promise((resolve, reject) => {
           const img = new Image();
           img.src = `skill-icons/${name}-icon.png`;
-          img.onload  = () => resolve({ name, img });
+          img.onload = () => resolve({ name, img });
           img.onerror = () => reject(`Failed to load ${name}-icon.png`);
         });
       }
@@ -105,25 +103,26 @@
         templates = await Promise.all(skillNames.map(loadTemplate));
       } catch (err) {
         document.getElementById("status").innerText =
-          "Error loading skill-icon templates → " + err;
+          "Error loading skill-icon templates: " + err;
         return;
       }
       document.getElementById("status").innerText =
-        "Template images loaded. Capturing screen…";
+        "Templates loaded. Capturing screen…";
 
-      // ── 4) Take a one-time snapshot of the entire RS3 window.
+      // 5) Capture a one-time snapshot of the entire RS3 window
       const fullSnap = await alt1.captureRegion(
         gameRect.x, gameRect.y, gameRect.width, gameRect.height
       );
-      document.getElementById("status").innerText = "Detecting skill positions…";
+      document.getElementById("status").innerText =
+        "Detecting skill positions…";
 
-      // ── 5) For each template, run findSubimage on fullSnap (threshold 0.9).
-      //     Build skillMap:  { "<SkillName>": { x: absX, y: absY } }.
+      // 6) For each template, run findSubimage on fullSnap (threshold 0.9)
+      //    Build skillMap: { "<SkillName>": { x: absX, y: absY } }
       const skillMap = {};
       for (const { name, img } of templates) {
         const matches = await alt1.findSubimage(fullSnap, img, 0.9);
         if (matches.length) {
-          const { x, y } = matches[0]; // relative coords inside the RS3 window
+          const { x, y } = matches[0]; // relative to the RS3 window
           skillMap[name] = { x: gameRect.x + x, y: gameRect.y + y };
         } else {
           console.warn(`Could not locate ${name}-icon.png on screen.`);
@@ -134,21 +133,21 @@
       document.getElementById("status").innerText =
         `Detected ${foundCount}/${skillNames.length} skills. Starting overlay.`;
 
-      // ── 6) Keep track of which skills have already been flagged.
+      // 7) Track which skills have already been flagged
       const doneSkills = new Set();
 
-      // ── 7) Function to overlay a red “✘” at (absX, absY).
+      // 8) Function to overlay a red “✘” at (absX, absY)
       function placeRedX(absX, absY) {
         const el = document.createElement("div");
         el.classList.add("xmark");
         el.textContent = "✘";
-        // Center the “✘” so it sits over the icon.
+        // Center the “✘” on the icon
         el.style.left = `${absX - gameRect.x - 12}px`;
         el.style.top  = `${absY - gameRect.y - 12}px`;
         document.body.appendChild(el);
       }
 
-      // ── 8) Main loop: read all chat lines once per animation frame.
+      // 9) Main loop: read all chat lines once per animation frame
       let lastIndex = 0;
       async function frameUpdate() {
         const allLines = await alt1.chat.readAll();
