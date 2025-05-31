@@ -1,130 +1,25 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>WeCantJOT: Jack of Trades Tracker</title>
-    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-    <!-- ===== Load the official RuneApps “nis.css” ===== -->
-    <!-- This will pull in RuneApps’s standard UI styling and fonts -->
-    <link rel="stylesheet" type="text/css" href="https://runeapps.org/nis/nis.css" />
-
-    <!-- (Optional) If you still need a few minor overrides, you can load your custom CSS **after** nis.css: -->
-    <!-- <link rel="stylesheet" href="styles.css" /> -->
-  </head>
-<body>
-<div id="status">Initializing…</div>
-
-  <!-- Load the bundled JavaScript -->
-  <!-- Load the bundled overlay logic -->
-<script src="main.js"></script>
-  <script>
-    (async () => {
-      // 1) Use alt1.getRegion() instead of alt1.getGameClient()
-      if (typeof alt1.getRegion !== "function") {
-        document.getElementById("status").innerText =
-          "Error: neither alt1.getRegion nor alt1.getGameClient is available.";
-        return;
-      }
-
-      // const gameRect = await alt1.getGameClient();
-      const gameRect = await alt1.getRegion();
-      if (!gameRect) {
-        document.getElementById("status").innerText =
-          "Could not find the RuneScape 3 window.";
-        return;
-      }
-
-      // 2) List all Jack-of-Trades skill names
-      const skillNames = [
-        "Attack","Constitution","Mining","Strength","Agility","Smithing",
-        "Defence","Herblore","Fishing","Ranged","Thieving","Cooking",
-        "Prayer","Crafting","Firemaking","Magic","Fletching","Woodcutting",
-        "Runecraft","Slayer","Farming","Construction","Hunter","Summoning",
-        "Dungeoneering","Divination","Invention",
-        "Necromancy","Archaeology"
-      ];
-
-      // 3) Load each PNG from skill-icons/<SkillName>-icon.png
-      const templates = [];
-      for (const name of skillNames) {
-        const img = new Image();
-        img.src = `skill-icons/${name}-icon.png`;
-        await new Promise((resolve, reject) => {
-          img.onload = () => resolve();
-          img.onerror = () => reject(`Failed to load ${name}-icon.png`);
-        });
-        templates.push({ name, img });
-      }
-      updateStatus(`Loaded ${templates.length}/${skillNames.length} templates. Capturing screen…`);
-
-      // 4) Capture a one-time snapshot of the RS3 window
-      const fullSnap = await alt1.captureRegion(
-        gameRect.x,
-        gameRect.y,
-        gameRect.width,
-        gameRect.height
-      );
-      updateStatus("Detecting skill positions…");
-
-      // 5) Template-match each skillicon on that screenshot (threshold 0.9)
-      const skillMap = {};
-      for (const { name, img } of templates) {
-        const matches = await alt1.findSubimage(fullSnap, img, 0.9);
-        if (matches.length > 0) {
-          const { x, y } = matches[0]; // relative inside the RS3 window
-          skillMap[name] = { x: gameRect.x + x, y: gameRect.y + y };
-        } else {
-          console.warn(`Could not locate ${name}-icon.png on screen.`);
-        }
-      }
-
-      const foundCount = Object.keys(skillMap).length;
-      updateStatus(`Detected ${foundCount}/${skillNames.length} skills. Listening for chat…`);
-
-      // 6) Track which skills have already been marked
-      const doneSkills = new Set();
-
-      // 7) Helper: overlay a red “✘” at absolute (x, y)
-      function placeRedX(absX, absY) {
-        const el = document.createElement("div");
-        el.classList.add("xmark");
-        el.textContent = "✘";
-        el.style.left = `${absX - gameRect.x - 12}px`;
-        el.style.top  = `${absY - gameRect.y - 12}px`;
-        document.body.appendChild(el);
-      }
-
-      // 8) Main loop: read all chat lines each animation frame
-      let lastIndex = 0;
-      function loop() {
-        alt1.chat.readAll().then((allLines) => {
-          for (let i = lastIndex; i < allLines.length; i++) {
-            const line = allLines[i].replace(/\u00A0/g, " ").trim();
-            const m = line.match(
-              /You gain experience in (\w+) and have now completed \d+\/25 skills for your Jack of Trades aura\./
-            );
-            if (m) {
-              const skillName = m[1];
-              if (!doneSkills.has(skillName) && skillMap[skillName]) {
-                doneSkills.add(skillName);
-                const { x: absX, y: absY } = skillMap[skillName];
-                placeRedX(absX, absY);
-              }
-            }
-          }
-          lastIndex = allLines.length;
-          window.requestAnimationFrame(loop);
-        });
-      }
-      window.requestAnimationFrame(loop);
-
-      function updateStatus(text) {
-        const status = document.getElementById("status");
-        if (status) status.textContent = text;
-      }
-    })();
-  </script>
-</body>
-</html>
+<!doctype html><html lang="en"><head><meta charset="UTF-8"/><title>WeCantJOT: Jack of Trades Tracker</title><meta http-equiv="X-UA-Compatible" content="IE=edge"/><meta name="viewport" content="width=device-width,initial-scale=1"/><link rel="stylesheet" href="https://runeapps.org/nis/nis.css"/></head><body><aside id="skill-checkboxes" style="position: absolute;
+        top: 10px;
+        right: 10px;
+        width: 200px;
+        max-height: 80vh;
+        overflow-y: auto;
+        background: rgba(0, 0, 0, 0.7);
+        color: #fff;
+        padding: 8px;
+        border-radius: 4px;
+        z-index: 1000;"><h2 style="margin: 0 0 8px 0; font-size: 1rem;">Completed Skills</h2><button id="reset-btn" style="margin-bottom: 8px;
+          width: 100%;
+          padding: 4px;
+          background: #c0392b;
+          color: #fff;
+          border: none;
+          border-radius: 2px;
+          cursor: pointer;">Reset All</button><ul id="checkbox-list" style="list-style: none; padding: 0; margin: 0;"></ul></aside><canvas id="overlay-canvas" style="position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 500;
+        pointer-events: none;
+        background: transparent;"></canvas><script defer="defer" src="./bundle.js"></script></body></html>
